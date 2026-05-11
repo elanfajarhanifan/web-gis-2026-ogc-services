@@ -1,0 +1,923 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WebGIS Kebumian Survei Pemetaan</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;600;700&display=swap" rel="stylesheet" />
+
+    <style>
+      :root {
+        --bg-deep: #060d14;
+        --bg-panel: #0a1620;
+        --bg-card: #0f1e2c;
+        --bg-hover: #162840;
+        --accent: #00e5a0;
+        --accent2: #00b8ff;
+        --accent3: #f59e0b;
+        --text: #e2eaf4;
+        --muted: #5e7a90;
+        --border: rgba(0, 229, 160, 0.12);
+        --border2: rgba(0, 184, 255, 0.15);
+        --glow: 0 0 18px rgba(0, 229, 160, 0.18);
+        --header-h: 52px;
+        --footer-h: 34px;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Barlow Condensed", sans-serif;
+        background: var(--bg-deep);
+        overflow: hidden;
+        color: var(--text);
+      }
+
+      /* ══════════════════════════════════════════
+         TOP HEADER BAR
+      ══════════════════════════════════════════ */
+      #header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: var(--header-h);
+        z-index: 2000;
+        background: linear-gradient(90deg, #040b11 0%, #071422 40%, #071422 60%, #040b11 100%);
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: stretch;
+        overflow: hidden;
+      }
+
+      /* decorative scan-line overlay */
+      #header::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0, 229, 160, 0.015) 3px, rgba(0, 229, 160, 0.015) 4px);
+        pointer-events: none;
+      }
+
+      /* corner accent lines */
+      #header::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, transparent 0%, var(--accent) 20%, var(--accent2) 50%, var(--accent) 80%, transparent 100%);
+        opacity: 0.6;
+      }
+
+      .hdr-left,
+      .hdr-right {
+        width: 220px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        gap: 10px;
+        border-right: 1px solid var(--border);
+      }
+      .hdr-right {
+        border-right: none;
+        border-left: 1px solid var(--border);
+        justify-content: flex-end;
+        text-align: right;
+      }
+
+      .hdr-icon {
+        width: 30px;
+        height: 30px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .hdr-icon svg {
+        width: 100%;
+        height: 100%;
+      }
+
+      .hdr-label {
+        line-height: 1.2;
+      }
+      .hdr-label span {
+        display: block;
+        font-family: "Share Tech Mono", monospace;
+        font-size: 9px;
+        color: var(--muted);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .hdr-label strong {
+        font-family: "Rajdhani", sans-serif;
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--accent);
+        letter-spacing: 0.04em;
+      }
+
+      .hdr-center {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 0 12px;
+        position: relative;
+      }
+
+      .hdr-title {
+        font-family: "Rajdhani", sans-serif;
+        font-size: 17px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--text);
+        line-height: 1;
+      }
+      .hdr-title em {
+        color: var(--accent);
+        font-style: normal;
+      }
+      .hdr-subtitle {
+        font-family: "Share Tech Mono", monospace;
+        font-size: 9px;
+        color: var(--muted);
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        margin-top: 3px;
+      }
+
+      /* Pulsing dot */
+      .live-dot {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent);
+        margin-right: 6px;
+        vertical-align: middle;
+        animation: pulse 2s ease-in-out infinite;
+        box-shadow: 0 0 6px var(--accent);
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.4;
+          transform: scale(0.7);
+        }
+      }
+
+      /* Identity - right panel */
+      .hdr-right .hdr-label strong {
+        color: var(--accent2);
+        font-size: 13px;
+      }
+      .hdr-right .hdr-label span:last-child {
+        color: var(--accent3);
+        font-family: "Share Tech Mono", monospace;
+        font-size: 10px;
+        letter-spacing: 0.06em;
+      }
+
+      /* ══════════════════════════════════════════
+         MAP WRAPPER
+      ══════════════════════════════════════════ */
+      #map-wrap {
+        position: fixed;
+        top: var(--header-h);
+        left: 0;
+        right: 0;
+        bottom: var(--footer-h);
+      }
+
+      #map {
+        width: 100%;
+        height: 100%;
+      }
+
+      /* ══════════════════════════════════════════
+         LEFT PANEL
+      ══════════════════════════════════════════ */
+      #panel {
+        position: absolute;
+        top: 14px;
+        left: 14px;
+        z-index: 1000;
+        width: 256px;
+        background: var(--bg-panel);
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow:
+          0 4px 30px rgba(0, 0, 0, 0.6),
+          var(--glow);
+        border: 1px solid var(--border);
+      }
+
+      .panel-header {
+        background: var(--bg-deep);
+        padding: 11px 14px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .panel-header-icon {
+        width: 28px;
+        height: 28px;
+        background: rgba(0, 229, 160, 0.08);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      .panel-header-icon svg {
+        width: 16px;
+        height: 16px;
+      }
+      .panel-header h2 {
+        font-size: 13px;
+        color: var(--accent);
+        font-family: "Rajdhani", sans-serif;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+      }
+      .panel-header p {
+        font-size: 10px;
+        color: var(--muted);
+        font-family: "Share Tech Mono", monospace;
+        margin-top: 1px;
+      }
+
+      .panel-section {
+        padding: 12px 12px 4px;
+        font-size: 9px;
+        font-family: "Share Tech Mono", monospace;
+        color: var(--muted);
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        border-top: 1px solid var(--border);
+        margin-top: 4px;
+      }
+      .panel-section:first-of-type {
+        border-top: none;
+        margin-top: 0;
+      }
+
+      .panel-body {
+        padding: 10px 10px 12px;
+      }
+
+      /* Layers */
+      .layer-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: var(--bg-card);
+        padding: 9px 10px;
+        border-radius: 7px;
+        margin-bottom: 7px;
+        cursor: pointer;
+        transition:
+          background 0.2s,
+          box-shadow 0.2s;
+        border: 1px solid transparent;
+      }
+      .layer-item:hover {
+        background: var(--bg-hover);
+        border-color: var(--border);
+        box-shadow: var(--glow);
+      }
+      .layer-left {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+
+      .check {
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+        background: var(--accent);
+        transition:
+          background 0.2s,
+          box-shadow 0.2s;
+        box-shadow: 0 0 6px var(--accent);
+        flex-shrink: 0;
+      }
+      .check.off {
+        background: #1e3040;
+        box-shadow: none;
+        border: 1px solid var(--muted);
+      }
+
+      .layer-text h4 {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .layer-text p {
+        font-size: 10px;
+        color: var(--muted);
+        font-family: "Share Tech Mono", monospace;
+      }
+
+      .badge {
+        font-size: 9px;
+        font-family: "Share Tech Mono", monospace;
+        letter-spacing: 0.06em;
+        padding: 3px 6px;
+        border-radius: 4px;
+        flex-shrink: 0;
+      }
+      .badge.wms {
+        background: rgba(245, 158, 11, 0.12);
+        color: var(--accent3);
+        border: 1px solid rgba(245, 158, 11, 0.25);
+      }
+      .badge.wfs {
+        background: rgba(0, 184, 255, 0.1);
+        color: var(--accent2);
+        border: 1px solid rgba(0, 184, 255, 0.22);
+      }
+
+      /* Basemap switcher */
+      .basemap-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+        padding: 8px 10px 12px;
+      }
+      .bm-btn {
+        background: var(--bg-card);
+        border: 1px solid transparent;
+        border-radius: 7px;
+        padding: 8px 6px;
+        cursor: pointer;
+        text-align: center;
+        transition: all 0.2s;
+        color: var(--muted);
+        font-family: "Barlow Condensed", sans-serif;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 5px;
+      }
+      .bm-btn:hover {
+        background: var(--bg-hover);
+        border-color: var(--border);
+        color: var(--text);
+      }
+      .bm-btn.active {
+        background: rgba(0, 229, 160, 0.08);
+        border-color: var(--accent);
+        color: var(--accent);
+        box-shadow: var(--glow);
+      }
+      .bm-thumb {
+        width: 36px;
+        height: 24px;
+        border-radius: 4px;
+        overflow: hidden;
+        flex-shrink: 0;
+      }
+      .bm-thumb.sat {
+        background: linear-gradient(135deg, #1a3a5c 0%, #2a5c3a 50%, #3a4a2a 100%);
+      }
+      .bm-thumb.osm {
+        background: linear-gradient(135deg, #b5d5a0 0%, #d4c88a 50%, #c8b8a0 100%);
+      }
+      .bm-thumb.dark {
+        background: linear-gradient(135deg, #111 0%, #1a2a1a 50%, #0a1020 100%);
+      }
+      .bm-thumb.topo {
+        background: linear-gradient(135deg, #a0b888 0%, #c0d0a0 50%, #90a878 100%);
+      }
+      .bm-thumb.terrain {
+        background: linear-gradient(135deg, #8fbc8f 0%, #6a9a5a 50%, #4a7a3a 100%);
+      }
+      .bm-thumb.watercolor {
+        background: linear-gradient(135deg, #b0c8e8 0%, #d8c0e0 50%, #e8d8b0 100%);
+      }
+
+      /* ══════════════════════════════════════════
+         BOTTOM FOOTER
+      ══════════════════════════════════════════ */
+      #footer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: var(--footer-h);
+        z-index: 2000;
+        background: linear-gradient(90deg, #040b11 0%, #071422 40%, #071422 60%, #040b11 100%);
+        border-top: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        gap: 20px;
+        font-family: "Share Tech Mono", monospace;
+        font-size: 10px;
+        color: var(--muted);
+      }
+      #footer::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: linear-gradient(90deg, transparent 0%, var(--accent) 30%, var(--accent2) 50%, var(--accent) 70%, transparent 100%);
+        opacity: 0.4;
+      }
+      #footer .sep {
+        color: var(--border);
+      }
+      #feat-count {
+        color: var(--accent);
+      }
+      #coord {
+        color: var(--accent2);
+        margin-left: auto;
+      }
+      #zoom-info {
+        color: var(--accent3);
+      }
+
+      /* Legend */
+      #legend {
+        position: absolute;
+        bottom: 14px;
+        right: 14px;
+        z-index: 1000;
+        background: var(--bg-panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px 14px;
+        min-width: 150px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      }
+      #legend h5 {
+        font-family: "Rajdhani", sans-serif;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--accent);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 6px;
+      }
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 5px;
+      }
+      .legend-swatch {
+        width: 20px;
+        height: 10px;
+        border-radius: 2px;
+        flex-shrink: 0;
+      }
+      .legend-label {
+        font-size: 11px;
+        color: var(--text);
+      }
+
+      /* Leaflet popup */
+      .leaflet-popup-content-wrapper {
+        background: var(--bg-panel);
+        color: var(--text);
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        box-shadow:
+          0 4px 20px rgba(0, 0, 0, 0.5),
+          var(--glow);
+        font-family: "Barlow Condensed", sans-serif;
+      }
+      .leaflet-popup-tip {
+        background: var(--bg-panel);
+      }
+      .popup-title {
+        font-family: "Rajdhani", sans-serif;
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--accent);
+        margin-bottom: 8px;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 5px;
+      }
+      .popup-row {
+        display: flex;
+        gap: 6px;
+        font-size: 12px;
+        line-height: 1.6;
+      }
+      .popup-row b {
+        color: var(--muted);
+        min-width: 80px;
+        flex-shrink: 0;
+      }
+      .popup-row span {
+        color: var(--text);
+      }
+
+      /* Scale control tweak */
+      .leaflet-control-scale-line {
+        background: rgba(6, 13, 20, 0.85) !important;
+        border: 1px solid var(--accent) !important;
+        border-top: 2px solid var(--accent) !important;
+        color: var(--accent) !important;
+        font-family: "Share Tech Mono", monospace !important;
+        font-size: 10px !important;
+        padding: 1px 5px !important;
+        border-radius: 0 0 4px 4px;
+      }
+
+      /* Zoom control */
+      .leaflet-control-zoom a {
+        background: var(--bg-panel) !important;
+        color: var(--accent) !important;
+        border: 1px solid var(--border) !important;
+        font-weight: 700;
+      }
+      .leaflet-control-zoom a:hover {
+        background: var(--bg-hover) !important;
+        color: var(--text) !important;
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- ═══════ HEADER BAR ═══════ -->
+    <header id="header">
+      <!-- LEFT: App brand -->
+      <div class="hdr-left">
+        <div class="hdr-icon">
+          <!-- Compass/earth icon -->
+          <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="16" cy="16" r="13" stroke="#00e5a0" stroke-width="1.5" stroke-dasharray="3 2" opacity=".5" />
+            <circle cx="16" cy="16" r="8" stroke="#00e5a0" stroke-width="1.5" />
+            <ellipse cx="16" cy="16" rx="4" ry="8" stroke="#00b8ff" stroke-width="1" />
+            <line x1="16" y1="4" x2="16" y2="28" stroke="#00e5a0" stroke-width="1" opacity=".4" />
+            <line x1="4" y1="16" x2="28" y2="16" stroke="#00e5a0" stroke-width="1" opacity=".4" />
+            <polygon points="16,9 18,14 16,13 14,14" fill="#f59e0b" />
+            <circle cx="16" cy="16" r="2" fill="#00e5a0" />
+          </svg>
+        </div>
+        <div class="hdr-label">
+          <span>GIS Platform v2.0</span>
+          <strong>WEBGIS KEBUMIAN</strong>
+        </div>
+      </div>
+
+      <!-- CENTER: Task title -->
+      <div class="hdr-center">
+        <div class="hdr-title">
+          <span class="live-dot"></span>
+          Tugas <em>Sistem Informasi Geospasial</em> Berbasis Web
+        </div>
+        <div class="hdr-subtitle">Kebumian &amp; Survei Pemetaan &nbsp;·&nbsp; Geoportal Kabupaten Bantul</div>
+      </div>
+
+      <!-- RIGHT: Identity -->
+      <div class="hdr-right">
+        <div class="hdr-label">
+          <span>Penyusun</span>
+          <strong>Elan Fajar Hanifan</strong>
+          <span>24/540146/SV/24788</span>
+        </div>
+        <div class="hdr-icon">
+          <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="4" width="24" height="24" rx="4" stroke="#00b8ff" stroke-width="1.5" opacity=".5" />
+            <circle cx="16" cy="13" r="4" stroke="#00b8ff" stroke-width="1.5" />
+            <path d="M8 26c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="#00b8ff" stroke-width="1.5" stroke-linecap="round" />
+          </svg>
+        </div>
+      </div>
+    </header>
+
+    <!-- ═══════ MAP ═══════ -->
+    <div id="map-wrap">
+      <div id="map"></div>
+
+      <!-- LEFT PANEL -->
+      <div id="panel">
+        <div class="panel-header">
+          <div class="panel-header-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#00e5a0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="3,6 9,3 15,6 21,3 21,18 15,21 9,18 3,21" />
+              <line x1="9" y1="3" x2="9" y2="18" />
+              <line x1="15" y1="6" x2="15" y2="21" />
+            </svg>
+          </div>
+          <div>
+            <h2>KONTROL LAYER</h2>
+            <p>Toggle &amp; Basemap</p>
+          </div>
+        </div>
+
+        <div class="panel-body">
+          <!-- Layers section -->
+          <div class="panel-section">Layer Data</div>
+
+          <div class="layer-item" onclick="toggleWMS()">
+            <div class="layer-left">
+              <div class="check" id="wmsCheck"></div>
+              <div class="layer-text">
+                <h4>Zona Gempa Bumi</h4>
+                <p>geonode:ta_gempa</p>
+              </div>
+            </div>
+            <div class="badge wms">WMS</div>
+          </div>
+
+          <div class="layer-item" onclick="toggleWFS1()">
+            <div class="layer-left">
+              <div class="check" id="wfs1Check"></div>
+              <div class="layer-text">
+                <h4>Kawasan Perdesaan &amp; Perkotaan</h4>
+                <p>WFS Polygon</p>
+              </div>
+            </div>
+            <div class="badge wfs">WFS</div>
+          </div>
+
+          <div class="layer-item" onclick="toggleWFS2()">
+            <div class="layer-left">
+              <div class="check" id="wfs2Check"></div>
+              <div class="layer-text">
+                <h4>Jalan</h4>
+                <p>WFS Line</p>
+              </div>
+            </div>
+            <div class="badge wfs">WFS</div>
+          </div>
+
+          <!-- Basemap section -->
+          <div class="panel-section">Basemap</div>
+        </div>
+
+        <div class="basemap-grid">
+          <button class="bm-btn active" id="bm-satellite" onclick="switchBM('satellite')">
+            <div class="bm-thumb sat"></div>
+            Satellite
+          </button>
+          <button class="bm-btn" id="bm-osm" onclick="switchBM('osm')">
+            <div class="bm-thumb osm"></div>
+            OSM
+          </button>
+          <button class="bm-btn" id="bm-dark" onclick="switchBM('dark')">
+            <div class="bm-thumb dark"></div>
+            Dark
+          </button>
+          <button class="bm-btn" id="bm-topo" onclick="switchBM('topo')">
+            <div class="bm-thumb topo"></div>
+            Topografi
+          </button>
+          <button class="bm-btn" id="bm-terrain" onclick="switchBM('terrain')">
+            <div class="bm-thumb terrain"></div>
+            Terrain
+          </button>
+          <button class="bm-btn" id="bm-watercolor" onclick="switchBM('watercolor')">
+            <div class="bm-thumb watercolor"></div>
+            Watercolor
+          </button>
+        </div>
+      </div>
+
+      <!-- LEGEND (bottom-right) -->
+      <div id="legend">
+        <h5>Legenda</h5>
+        <div class="legend-item">
+          <div class="legend-swatch" style="background: #ff0000; opacity: 0.7"></div>
+          <span class="legend-label">Kawasan Perkotaan</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-swatch" style="background: #00ff00; opacity: 0.7"></div>
+          <span class="legend-label">Kawasan Perdesaan</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-swatch" style="background: #0000ff; opacity: 0.8; height: 4px; border-radius: 2px"></div>
+          <span class="legend-label">Jaringan Jalan</span>
+        </div>
+        <div class="legend-item" style="margin-top: 6px; border-top: 1px solid var(--border); padding-top: 6px">
+          <div class="legend-swatch" style="background: linear-gradient(to right, rgba(255, 0, 0, 0.5), rgba(0, 0, 255, 0.5))"></div>
+          <span class="legend-label">WMS Zona Gempa</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════ FOOTER ═══════ -->
+    <footer id="footer">
+      <span class="live-dot" style="width: 5px; height: 5px"></span>
+      <span id="feat-count">Memuat data...</span>
+      <span class="sep">|</span>
+      <span id="zoom-info">Zoom: 11</span>
+      <span class="sep">|</span>
+      <span>Proyeksi: EPSG:4326 (WGS84)</span>
+      <span id="coord">0.00000°, 0.00000°</span>
+    </footer>
+
+    <script>
+      const GS = "https://geoportal.bantulkab.go.id/geoserver";
+      const WMS_LYR = "geonode:ta_gempa";
+      const WFS_LYR1 = "geonode:kawasan_perdesaan_dan_perkotaan_kugi";
+      const WFS_LYR2 = "geonode:jalan_ln_50k";
+
+      // ── Basemaps ─────────────────────────────
+      const BM = {
+        satellite: L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { attribution: "© Esri", maxZoom: 19 }),
+        osm: L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OSM", maxZoom: 19 }),
+        dark: L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { attribution: "© CartoDB", maxZoom: 19 }),
+        topo: L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", { attribution: "© OpenTopoMap", maxZoom: 17 }),
+        terrain: L.tileLayer("https://stamen-tiles-{s}.a.ssl.fastly.net/terrain/{z}/{x}/{y}.jpg", { attribution: "© Stamen / ODbL", maxZoom: 18, subdomains: "abcd" }),
+        watercolor: L.tileLayer("https://tiles.stadiamaps.com/tiles/stamen_watercolor/{z}/{x}/{y}.jpg", { attribution: "© Stadia/Stamen/ODbL", maxZoom: 16 }),
+      };
+      let curBM = "satellite";
+
+      const map = L.map("map", {
+        center: [-7.8, 110.4],
+        zoom: 11,
+        zoomControl: true,
+        layers: [BM.satellite],
+      });
+
+      // ── Scale control ─────────────────────────
+      L.control.scale({ position: "bottomleft", imperial: false, metric: true }).addTo(map);
+
+      // ── Coord + zoom tracker ──────────────────
+      map.on("mousemove", (e) => {
+        document.getElementById("coord").textContent = `${e.latlng.lat.toFixed(5)}°, ${e.latlng.lng.toFixed(5)}°`;
+      });
+      map.on("zoomend", () => {
+        document.getElementById("zoom-info").textContent = `Zoom: ${map.getZoom()}`;
+      });
+
+      // ── WMS ───────────────────────────────────
+      const wmsLayer = L.tileLayer.wms(`${GS}/geonode/wms`, {
+        layers: WMS_LYR,
+        format: "image/png",
+        transparent: true,
+        version: "1.1.1",
+        opacity: 0.8,
+        attribution: "GeoServer WMS",
+      });
+      let wmsOn = true;
+      wmsLayer.addTo(map);
+
+      // ── WFS ───────────────────────────────────
+      let wfsGJ1 = null,
+        wfsGJ2 = null,
+        wfsOn1 = true,
+        wfsOn2 = true;
+
+      function getStyle1(f) {
+        const jenis = (f?.properties?.jenis_kawasan || f?.properties?.kawasan || "").toLowerCase();
+        if (jenis.includes("perkotaan")) return { color: "#ff0000", weight: 2, fillColor: "#ff0000", fillOpacity: 0.5 };
+        if (jenis.includes("perdesaan")) return { color: "#00ff00", weight: 2, fillColor: "#00ff00", fillOpacity: 0.5 };
+        return { color: "#ffff00", weight: 2, fillColor: "#ffff00", fillOpacity: 0.5 };
+      }
+
+      function getStyle2() {
+        return { color: "#0000ff", weight: 3, opacity: 0.8 };
+      }
+
+      function loadWFS1() {
+        const url = `${GS}/geonode/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=${encodeURIComponent(WFS_LYR1)}&outputFormat=application/json&srsName=EPSG:4326`;
+        fetch(url)
+          .then((r) => r.json())
+          .then((data) => {
+            wfsGJ1 = L.geoJSON(data, {
+              style: getStyle1,
+              onEachFeature(feat, lyr) {
+                lyr.on({
+                  click(e) {
+                    L.DomEvent.stopPropagation(e);
+                    showPopup(e.latlng, feat.properties, "wfs1");
+                  },
+                });
+              },
+            });
+            if (wfsOn1) wfsGJ1.addTo(map);
+            updateFeatCount();
+          })
+          .catch((err) => {
+            console.warn("WFS1 error", err);
+            updateFeatCount();
+          });
+      }
+
+      function loadWFS2() {
+        const url = `${GS}/geonode/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=${encodeURIComponent(WFS_LYR2)}&outputFormat=application/json&srsName=EPSG:4326`;
+        fetch(url)
+          .then((r) => r.json())
+          .then((data) => {
+            wfsGJ2 = L.geoJSON(data, {
+              style: getStyle2,
+              onEachFeature(feat, lyr) {
+                lyr.on({
+                  click(e) {
+                    L.DomEvent.stopPropagation(e);
+                    showPopup(e.latlng, feat.properties, "wfs2");
+                  },
+                });
+              },
+            });
+            if (wfsOn2) wfsGJ2.addTo(map);
+            updateFeatCount();
+          })
+          .catch((err) => {
+            console.warn("WFS2 error", err);
+            updateFeatCount();
+          });
+      }
+
+      function updateFeatCount() {
+        let c = 0;
+        if (wfsGJ1) c += wfsGJ1.getLayers().length;
+        if (wfsGJ2) c += wfsGJ2.getLayers().length;
+        document.getElementById("feat-count").textContent = `${c} fitur WFS dimuat`;
+      }
+
+      function showPopup(latlng, props, type) {
+        let rows = Object.entries(props)
+          .filter(([, v]) => v !== null && v !== undefined)
+          .map(([k, v]) => `<div class="popup-row"><b>${k}</b><span>${v}</span></div>`)
+          .join("");
+        const title = type === "wfs1" ? "Kawasan Perdesaan/Perkotaan" : "Jaringan Jalan";
+        L.popup({ maxWidth: 260 }).setLatLng(latlng).setContent(`<div class="popup-title">${title}</div>${rows}`).openOn(map);
+      }
+
+      // ── Toggle functions ──────────────────────
+      function toggleWMS() {
+        wmsOn = !wmsOn;
+        wmsOn ? map.addLayer(wmsLayer) : map.removeLayer(wmsLayer);
+        syncCheck("wmsCheck", wmsOn);
+      }
+
+      function toggleWFS1() {
+        wfsOn1 = !wfsOn1;
+        if (wfsGJ1) {
+          wfsOn1 ? wfsGJ1.addTo(map) : map.removeLayer(wfsGJ1);
+        }
+        syncCheck("wfs1Check", wfsOn1);
+        updateFeatCount();
+      }
+
+      function toggleWFS2() {
+        wfsOn2 = !wfsOn2;
+        if (wfsGJ2) {
+          wfsOn2 ? wfsGJ2.addTo(map) : map.removeLayer(wfsGJ2);
+        }
+        syncCheck("wfs2Check", wfsOn2);
+        updateFeatCount();
+      }
+
+      function syncCheck(id, on) {
+        const el = document.getElementById(id);
+        el.style.background = on ? "" : "transparent";
+        el.classList.toggle("off", !on);
+      }
+
+      // ── Basemap switcher ─────────────────────
+      function switchBM(name) {
+        if (name === curBM) return;
+        map.removeLayer(BM[curBM]);
+        BM[name].addTo(map);
+        BM[name].bringToBack();
+        document.getElementById("bm-" + curBM).classList.remove("active");
+        document.getElementById("bm-" + name).classList.add("active");
+        curBM = name;
+      }
+
+      // Load WFS on start
+      loadWFS1();
+      loadWFS2();
+    </script>
+  </body>
+</html>
